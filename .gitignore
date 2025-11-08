@@ -1,1 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Data files
 data/
+*.csv
+*.pkl
+*.h5
+*.hdf5
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Project specific
+.specify/
+.cursor/
+*.log
+.env
+.env.local
+
+# Model files
+data/models/
+*.pkl
+*.npz
+*.npy
+
+# Split data files (generated from train/validation split)
+data/train_split.csv
+data/validation_split.csv
+
+specs/
