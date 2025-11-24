@@ -1,1 +1,9 @@
 data/
+.cursor/
+.specify/
+.venv/
+__pycache__/
+*.pyc
+
+specs/
+logs/
