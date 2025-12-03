@@ -74,26 +74,35 @@ def train_model(df_feature, df_query):
     # 创建模型保存目录
     model_dir = os.path.join(root_dir, 'user_data', 'model')
     os.makedirs(model_dir, exist_ok=True)
+    
+    # 检查索引文件是否存在，避免不必要的划分
+    indices_path = os.path.join(model_dir, 'fold_indices.pkl')
+    if os.path.exists(indices_path):
+        log.info('加载保存的验证集索引，跳过数据划分')
+        fold_splits = joblib.load(indices_path)
+    else:
+        # 需要重新划分
+        log.info('进行数据划分...')
+        kfold = GroupKFold(n_splits=5)
+        fold_splits = list(kfold.split(df_train[feature_names], df_train[ycol],
+                                       df_train['user_id']))
+        # 保存索引，供下次使用
+        joblib.dump(fold_splits, indices_path)
+        log.info(f'验证集索引已保存: {indices_path}')
 
+    
     # 训练模型
-    kfold = GroupKFold(n_splits=5)
-    for fold_id, (trn_idx, val_idx) in enumerate(
-            kfold.split(df_train[feature_names], df_train[ycol],
-                        df_train['user_id'])):
-        X_train = df_train.iloc[trn_idx][feature_names]
-        Y_train = df_train.iloc[trn_idx][ycol]
-
-        X_val = df_train.iloc[val_idx][feature_names]
-        Y_val = df_train.iloc[val_idx][ycol]
-
-        # 检查模型是否已存在（断点续训）
+    for fold_id, (trn_idx, val_idx) in enumerate(fold_splits):
         model_path = os.path.join(model_dir, f'lgb{fold_id}.pkl')
+        
+        # 先检查模型是否已存在（断点续训）
         if os.path.exists(model_path):
-            log.info(f'跳过 Fold_{fold_id + 1}，模型已存在: {model_path}')
+            log.info(f'跳过 Fold_{fold_id + 1} 训练，模型已存在: {model_path}')
             # 加载已存在的模型用于预测
             lgb_model = joblib.load(model_path)
             
-            # 生成验证集预测
+            # 生成验证集预测（仍需要验证集索引）
+            X_val = df_train.iloc[val_idx][feature_names]
             pred_val = lgb_model.predict_proba(
                 X_val, num_iteration=lgb_model.best_iteration_)[:, 1]
             df_oof = df_train.iloc[val_idx][['user_id', 'article_id', ycol]].copy()
@@ -113,9 +122,16 @@ def train_model(df_feature, df_query):
             df_importance_list.append(df_importance)
             continue  # 跳过训练，继续下一折
 
+        # 模型不存在，进行训练
         log.debug(
             f'\nFold_{fold_id + 1} Training ================================\n'
         )
+        
+        X_train = df_train.iloc[trn_idx][feature_names]
+        Y_train = df_train.iloc[trn_idx][ycol]
+
+        X_val = df_train.iloc[val_idx][feature_names]
+        Y_val = df_train.iloc[val_idx][ycol]
 
         # 新版本LightGBM使用callbacks替代verbose
         from lightgbm import early_stopping, log_evaluation

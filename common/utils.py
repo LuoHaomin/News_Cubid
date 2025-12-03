@@ -1,5 +1,5 @@
 import logging
-import signal
+import sys
 
 import multitasking
 import numpy as np
@@ -7,8 +7,13 @@ import pandas as pd
 
 max_threads = multitasking.config['CPU_CORES']
 multitasking.set_max_threads(max_threads)
-multitasking.set_engine('process')
-signal.signal(signal.SIGINT, multitasking.killall)
+# Windows 上使用 thread 引擎，避免 pickle 错误
+if sys.platform == 'win32':
+    multitasking.set_engine('thread')
+else:
+    multitasking.set_engine('process')
+    import signal
+    signal.signal(signal.SIGINT, multitasking.killall)
 
 
 class Logger(object):
