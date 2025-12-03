@@ -30,3 +30,12 @@ python rank/pointwise/rank_feature.py --mode valid --logfile "${time}.log"
 echo "lgb 模型训练"
 python rank/pointwise/rank_lgb.py --mode valid --logfile "${time}.log"
 
+
+# 1. 特征工程
+python rank/listwise/rank_feature_listwise.py --mode valid --logfile "${time}.log"
+
+# 2. 模型训练
+python rank/listwise/rank_lambdamart.py --mode valid --logfile "${time}.log"
+
+# 3. 在线预测
+python rank/listwise/rank_lambdamart.py --mode online --logfile "${time}.log"

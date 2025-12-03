@@ -1,0 +1,310 @@
+import argparse
+import gc
+import os
+import random
+import warnings
+
+import joblib
+import lightgbm as lgb
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import GroupKFold
+from sklearn.preprocessing import LabelEncoder
+from tqdm import tqdm
+
+from common.utils import Logger
+from eval.evaluate import evaluate
+from rank.utils import gen_sub
+
+# 获取项目根目录
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+warnings.filterwarnings('ignore')
+
+seed = 2020
+random.seed(seed)
+np.random.seed(seed)
+
+# 命令行参数
+parser = argparse.ArgumentParser(description='LambdaMART 排序')
+parser.add_argument('--mode', default='valid')
+parser.add_argument('--logfile', default='test.log')
+
+args = parser.parse_args()
+
+mode = args.mode
+logfile = args.logfile
+
+# 初始化日志
+log_dir = os.path.join(root_dir, 'user_data', 'log')
+os.makedirs(log_dir, exist_ok=True)
+log = Logger(os.path.join(log_dir, logfile)).logger
+log.info(f'LambdaMART 排序，mode: {mode}')
+
+
+def get_group_sizes(df, group_col='user_id'):
+    """
+    获取每个组的样本数量，并确保数据按照 group 顺序排列。
+    """
+    if df.empty:
+        return []
+
+    if not df[group_col].is_monotonic_increasing:
+        raise ValueError('数据未按 user_id 排序，请先排序后再计算 group。')
+
+    return df.groupby(group_col, sort=False).size().tolist()
+
+
+def train_model(df_feature, df_query):
+    """
+    使用 LambdaMART 训练模型
+    LambdaMART 是 listwise 方法，直接优化列表级别的排序指标
+    """
+    df_train = df_feature[df_feature['label'].notnull()].copy()
+    df_test = df_feature[df_feature['label'].isnull()].copy()
+
+    df_train = df_train.sort_values(['user_id', 'article_id']).reset_index(drop=True)
+    df_test = df_test.sort_values(['user_id', 'article_id']).reset_index(drop=True)
+
+    del df_feature
+    gc.collect()
+
+    ycol = 'label'
+    feature_names = list(
+        filter(
+            lambda x: x not in [ycol, 'created_at_datetime', 'click_datetime', 'user_id', 'article_id'],
+            df_train.columns))
+    feature_names.sort()
+
+    log.info(f'特征数量: {len(feature_names)}')
+    log.debug(f'特征列表: {feature_names}')
+
+    # LambdaMART 模型配置
+    model = lgb.LGBMRanker(
+        num_leaves=64,
+        max_depth=10,
+        learning_rate=0.05,
+        n_estimators=10000,
+        subsample=0.8,
+        feature_fraction=0.8,
+        reg_alpha=0.5,
+        reg_lambda=0.5,
+        random_state=seed,
+        importance_type='gain',
+        metric='ndcg',  # 使用 NDCG 作为评估指标
+        objective='lambdarank',  # LambdaRank 目标函数
+        ndcg_eval_at=[5, 10, 20, 40, 50],  # 评估多个位置的 NDCG
+    )
+
+    oof = []
+    prediction = df_test[['user_id', 'article_id']].copy()
+    prediction['pred'] = 0
+    df_importance_list = []
+
+    # 创建模型保存目录
+    model_dir = os.path.join(root_dir, 'user_data', 'model', 'listwise')
+    os.makedirs(model_dir, exist_ok=True)
+    
+    # 检查索引文件是否存在，避免不必要的划分
+    indices_path = os.path.join(model_dir, 'fold_indices_listwise.pkl')
+    if os.path.exists(indices_path):
+        log.info('加载保存的验证集索引，跳过数据划分')
+        fold_splits = joblib.load(indices_path)
+    else:
+        # 需要重新划分
+        log.info('进行数据划分...')
+        kfold = GroupKFold(n_splits=5)
+        fold_splits = list(kfold.split(df_train[feature_names], df_train[ycol],
+                                       df_train['user_id']))
+        # 保存索引，供下次使用
+        joblib.dump(fold_splits, indices_path)
+        log.info(f'验证集索引已保存: {indices_path}')
+
+    # 训练模型
+    df_test_features = df_test[feature_names]
+    test_group_sizes = get_group_sizes(df_test) if not df_test.empty else []
+
+    for fold_id, (trn_idx, val_idx) in enumerate(fold_splits):
+        model_path = os.path.join(model_dir, f'lambdamart{fold_id}.pkl')
+        
+        # 先检查模型是否已存在（断点续训）
+        if os.path.exists(model_path):
+            log.info(f'跳过 Fold_{fold_id + 1} 训练，模型已存在: {model_path}')
+            # 加载已存在的模型用于预测
+            lgb_model = joblib.load(model_path)
+            
+            # 生成验证集预测
+            df_val = df_train.iloc[val_idx].sort_values(['user_id', 'article_id']).reset_index(drop=True)
+            X_val = df_val[feature_names]
+            val_group_sizes = get_group_sizes(df_val)
+            pred_val = lgb_model.predict(X_val, group=val_group_sizes)
+            
+            df_oof = df_val[['user_id', 'article_id', ycol]].copy()
+            df_oof['pred'] = pred_val
+            oof.append(df_oof)
+            
+            # 生成测试集预测
+            if not df_test.empty:
+                pred_test = lgb_model.predict(df_test_features, group=test_group_sizes)
+                prediction['pred'] += pred_test / 5
+            
+            # 特征重要性
+            df_importance = pd.DataFrame({
+                'feature_name': feature_names,
+                'importance': lgb_model.feature_importances_,
+            })
+            df_importance_list.append(df_importance)
+            continue  # 跳过训练，继续下一折
+
+        # 模型不存在，进行训练
+        log.info(f'\nFold_{fold_id + 1} Training ================================\n')
+        
+        df_trn = df_train.iloc[trn_idx].sort_values(['user_id', 'article_id']).reset_index(drop=True)
+        df_val = df_train.iloc[val_idx].sort_values(['user_id', 'article_id']).reset_index(drop=True)
+
+        X_train = df_trn[feature_names]
+        Y_train = df_trn[ycol].values
+        
+        X_val = df_val[feature_names]
+        Y_val = df_val[ycol].values
+
+        # 获取每个用户的样本数量（group信息）
+        train_group_sizes = get_group_sizes(df_trn)
+        val_group_sizes = get_group_sizes(df_val)
+
+        log.info(f'训练集用户数: {len(train_group_sizes)}, 验证集用户数: {len(val_group_sizes)}')
+        log.info(f'训练集样本数: {len(X_train)}, 验证集样本数: {len(X_val)}')
+
+        # 新版本LightGBM使用callbacks替代verbose
+        from lightgbm import early_stopping, log_evaluation
+        callbacks = [
+            early_stopping(stopping_rounds=100),
+            log_evaluation(period=100)
+        ]
+        
+        lgb_model = model.fit(
+            X_train,
+            Y_train,
+            group=train_group_sizes,  # 每个用户的样本数量
+            eval_set=[(X_val, Y_val)],
+            eval_group=[val_group_sizes],  # 验证集的group信息
+            eval_names=['valid'],
+            callbacks=callbacks
+        )
+
+        # 验证集预测
+        pred_val = lgb_model.predict(X_val, group=val_group_sizes)
+        df_oof = df_val[['user_id', 'article_id', ycol]].copy()
+        df_oof['pred'] = pred_val
+        oof.append(df_oof)
+
+        # 测试集预测
+        if not df_test.empty:
+            pred_test = lgb_model.predict(df_test_features, group=test_group_sizes)
+            prediction['pred'] += pred_test / 5
+
+        df_importance = pd.DataFrame({
+            'feature_name': feature_names,
+            'importance': lgb_model.feature_importances_,
+        })
+        df_importance_list.append(df_importance)
+
+        # 保存模型
+        joblib.dump(lgb_model, model_path)
+        log.info(f'Fold_{fold_id + 1} 模型已保存: {model_path}')
+
+    # 特征重要性
+    df_importance = pd.concat(df_importance_list)
+    df_importance = df_importance.groupby([
+        'feature_name'
+    ])['importance'].agg('mean').sort_values(ascending=False).reset_index()
+    log.info(f'特征重要性 Top 20:\n{df_importance.head(20)}')
+
+    # 生成线下预测结果
+    df_oof = pd.concat(oof)
+    df_oof.sort_values(['user_id', 'pred'],
+                       inplace=True,
+                       ascending=[True, False])
+    log.debug(f'df_oof.head: {df_oof.head()}')
+
+    # 计算相关指标
+    total = df_query[df_query['click_article_id'] != -1].user_id.nunique()
+    hitrate_5, mrr_5, hitrate_10, mrr_10, hitrate_20, mrr_20, hitrate_40, mrr_40, hitrate_50, mrr_50 = evaluate(
+        df_oof, total)
+    log.info(
+        f'评估指标 - HitRate@5/10/20/40/50: {hitrate_5:.6f}, {hitrate_10:.6f}, {hitrate_20:.6f}, {hitrate_40:.6f}, {hitrate_50:.6f}'
+    )
+    log.info(
+        f'评估指标 - MRR@5/10/20/40/50: {mrr_5:.6f}, {mrr_10:.6f}, {mrr_20:.6f}, {mrr_40:.6f}, {mrr_50:.6f}'
+    )
+
+    # 生成提交文件
+    df_sub = gen_sub(prediction)
+    df_sub.sort_values(['user_id'], inplace=True)
+    pred_dir = os.path.join(root_dir, 'prediction_result')
+    os.makedirs(pred_dir, exist_ok=True)
+    df_sub.to_csv(os.path.join(pred_dir, 'result_listwise.csv'), index=False)
+    log.info(f'提交文件已保存: {os.path.join(pred_dir, "result_listwise.csv")}')
+
+
+def online_predict(df_test):
+    """
+    在线预测
+    """
+    ycol = 'label'
+    feature_names = list(
+        filter(
+            lambda x: x not in [ycol, 'created_at_datetime', 'click_datetime', 'user_id', 'article_id'],
+            df_test.columns))
+    feature_names.sort()
+
+    df_test = df_test.sort_values(['user_id', 'article_id']).reset_index(drop=True)
+    prediction = df_test[['user_id', 'article_id']].copy()
+    prediction['pred'] = 0
+
+    model_dir = os.path.join(root_dir, 'user_data', 'model', 'listwise')
+    test_group_sizes = get_group_sizes(df_test) if not df_test.empty else []
+    
+    for fold_id in tqdm(range(5)):
+        model_path = os.path.join(model_dir, f'lambdamart{fold_id}.pkl')
+        if not os.path.exists(model_path):
+            log.warning(f'模型文件不存在: {model_path}，跳过该折')
+            continue
+            
+        lgb_model = joblib.load(model_path)
+        if not df_test.empty:
+            pred_test = lgb_model.predict(df_test[feature_names], group=test_group_sizes)
+            prediction['pred'] += pred_test / 5
+
+    # 生成提交文件
+    df_sub = gen_sub(prediction)
+    df_sub.sort_values(['user_id'], inplace=True)
+    pred_dir = os.path.join(root_dir, 'prediction_result')
+    os.makedirs(pred_dir, exist_ok=True)
+    df_sub.to_csv(os.path.join(pred_dir, 'result_listwise.csv'), index=False)
+    log.info(f'提交文件已保存: {os.path.join(pred_dir, "result_listwise.csv")}')
+
+
+if __name__ == '__main__':
+    if mode == 'valid':
+        df_feature = pd.read_pickle(os.path.join(root_dir, 'user_data', 'data', 'offline', 'feature_listwise.pkl'))
+        df_query = pd.read_pickle(os.path.join(root_dir, 'user_data', 'data', 'offline', 'query.pkl'))
+
+        # 对类别特征进行编码
+        for f in df_feature.select_dtypes('object').columns:
+            if f not in ['user_id', 'article_id']:
+                lbl = LabelEncoder()
+                df_feature[f] = lbl.fit_transform(df_feature[f].astype(str))
+
+        train_model(df_feature, df_query)
+    else:
+        df_feature = pd.read_pickle(os.path.join(root_dir, 'user_data', 'data', 'online', 'feature_listwise.pkl'))
+        
+        # 对类别特征进行编码
+        for f in df_feature.select_dtypes('object').columns:
+            if f not in ['user_id', 'article_id']:
+                lbl = LabelEncoder()
+                df_feature[f] = lbl.fit_transform(df_feature[f].astype(str))
+        
+        online_predict(df_feature)
+
