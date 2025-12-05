@@ -1,0 +1,10 @@
+annoy
+gensim
+joblib
+lightgbm
+multitasking
+numpy
+pandas
+pandarallel
+scikit-learn
+tqdm

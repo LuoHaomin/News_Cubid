@@ -2,6 +2,11 @@
 
 time=$(date "+%Y-%m-%d-%H:%M:%S")
 
+# 环境准备
+echo "环境准备"
+source ./env/bin/activate
+export PYTHONPATH=.:$PYTHONPATH
+
 # 处理数据
 echo "处理数据"
 python preprocess/data.py --mode valid --logfile "${time}.log"
