@@ -69,7 +69,7 @@ def word2vec(df_, f1, f2, model_path):
     if os.path.exists(f'{model_path}/w2v.m'):
         model = Word2Vec.load(f'{model_path}/w2v.m')
     else:
-        # 新版本gensim使用vector_size替代size
+        # Word2Vec 参数（恢复原始稳定配置）
         model = Word2Vec(sentences=sentences,
                          vector_size=256,
                          window=3,
@@ -79,7 +79,7 @@ def word2vec(df_, f1, f2, model_path):
                          seed=seed,
                          negative=5,
                          workers=10,
-                         epochs=1)
+                         epochs=1)           # 原始参数
         model.save(f'{model_path}/w2v.m')
 
     article_vec_map = {}
@@ -103,6 +103,8 @@ def recall(df_query, article_vec_map, article_index, user_item_dict,
         interacted_items = interacted_items[-1:]
 
         for item in interacted_items:
+            if item not in article_vec_map:
+                continue
             article_vec = article_vec_map[item]
 
             item_ids, distances = article_index.get_nns_by_vector(

@@ -54,6 +54,9 @@ def train_model(df_feature, df_query):
             df_train.columns))
     feature_names.sort()
 
+    # 优化后的 LightGBM 参数
+    # - 使用 scale_pos_weight 处理样本不平衡（避免 is_unbalance 导致早停过快）
+    # - 增加 num_leaves 和 max_depth 提升模型容量
     model = lgb.LGBMClassifier(num_leaves=64,
                                max_depth=10,
                                learning_rate=0.05,
@@ -64,6 +67,8 @@ def train_model(df_feature, df_query):
                                reg_lambda=0.5,
                                random_state=seed,
                                importance_type='gain',
+                               scale_pos_weight=10,       # 正样本权重（适度提升，不要太大）
+                               min_child_samples=100,     # 防止过拟合
                                metric=None)
 
     oof = []
