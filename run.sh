@@ -4,8 +4,14 @@ time=$(date "+%Y-%m-%d-%H:%M:%S")
 
 # 环境准备
 echo "环境准备"
-source ./env/bin/activate
+# source ./env/bin/activate
 export PYTHONPATH=.:$PYTHONPATH
+
+rm -rf user_data/model/
+rm -rf user_data/data/offline/
+rm -rf user_data/data/online/
+rm -rf user_data/sim/
+rm -rf user_data/tmp/
 
 # 处理数据
 echo "处理数据"
@@ -27,20 +33,18 @@ python recall/recall_w2v.py --mode valid --logfile "${time}.log"
 echo "召回合并"
 python recall/recall.py --mode valid --logfile "${time}.log"
 
-# 排序特征
+# 排序特征（Pointwise 基础特征）
 echo "排序特征"
 python rank/pointwise/rank_feature.py --mode valid --logfile "${time}.log"
 
-# lgb 模型训练
-echo "lgb 模型训练"
-python rank/pointwise/rank_lgb.py --mode valid --logfile "${time}.log"
-
-
-# 1. 特征工程
+# Listwise 特征工程
+echo "Listwise 特征"
 python rank/listwise/rank_feature_listwise.py --mode valid --logfile "${time}.log"
 
-# 2. 模型训练
+# LambdaMART 排序模型训练
+echo "LambdaMART 训练"
 python rank/listwise/rank_lambdamart.py --mode valid --logfile "${time}.log"
 
-# 3. 在线预测
-python rank/listwise/rank_lambdamart.py --mode online --logfile "${time}.log"
+# 在线预测
+# echo "在线预测"
+# python rank/listwise/rank_lambdamart.py --mode online --logfile "${time}.log"

@@ -36,18 +36,19 @@ DATA_DIR = os.path.join(root_dir, 'user_data', 'data', 'offline' if mode == 'val
 POINTWISE_FEATURE_FILE = os.path.join(DATA_DIR, 'feature.pkl')
 LISTWISE_FEATURE_FILE = os.path.join(DATA_DIR, 'feature_listwise.pkl')
 
+# 移除了重要性为0的特征
 LIST_FEATURE_COLUMNS = [
-    'list_size',
+    # 'list_size',                 # 重要性为0，移除
     'list_rank',
-    'list_category_diversity',
-    'list_category_coverage',
+    # 'list_category_diversity',   # 重要性为0，移除
+    # 'list_category_coverage',    # 重要性为0，移除
     'list_time_span',
-    'list_avg_words_count',
+    # 'list_avg_words_count',      # 重要性为0，移除
     'list_std_words_count',
-    'list_avg_sim_score',
-    'list_std_sim_score',
-    'list_max_sim_score',
-    'list_min_sim_score',
+    # 'list_avg_sim_score',        # 重要性为0，移除
+    # 'list_std_sim_score',        # 重要性为0，移除
+    # 'list_max_sim_score',        # 重要性为0，移除
+    # 'list_min_sim_score',        # 重要性为0，移除
     'words_count_diff_from_avg',
     'sim_score_diff_from_avg',
     'sim_score_diff_from_max',
@@ -107,36 +108,25 @@ def add_listwise_features(df_feature: pd.DataFrame) -> pd.DataFrame:
     df.sort_values(sort_cols, ascending=sort_orders, inplace=True, na_position='last')
     df.reset_index(drop=True, inplace=True)
 
-    # 列表规模与多样性
-    df['list_size'] = df.groupby('user_id')['article_id'].transform('count')
-    df['list_category_diversity'] = df.groupby('user_id')['category_id'].transform('nunique')
-    df['list_category_coverage'] = df['list_category_diversity'] / df['list_size']
-
     # 时间跨度
     df['list_time_span'] = df.groupby('user_id')['created_at_ts'].transform(lambda x: x.max() - x.min())
     df['list_time_span'] = df['list_time_span'].fillna(0)
 
-    # 字数统计
-    df['list_avg_words_count'] = df.groupby('user_id')['words_count'].transform('mean')
+    # 字数统计（移除了 list_avg_words_count，重要性为0）
+    _list_avg_words_count = df.groupby('user_id')['words_count'].transform('mean')
     df['list_std_words_count'] = df.groupby('user_id')['words_count'].transform('std').fillna(0)
-    df['words_count_diff_from_avg'] = df['words_count'] - df['list_avg_words_count']
+    df['words_count_diff_from_avg'] = df['words_count'] - _list_avg_words_count
 
-    # rank
+    # rank（移除了零重要性特征：list_size, list_max_sim_score, list_avg_sim_score, list_std_sim_score, list_min_sim_score）
     if 'sim_score' in df.columns:
         df['list_rank'] = df.groupby('user_id')['sim_score'].rank(method='first', ascending=False)
-        df['list_avg_sim_score'] = df.groupby('user_id')['sim_score'].transform('mean')
-        df['list_std_sim_score'] = df.groupby('user_id')['sim_score'].transform('std').fillna(0)
-        df['list_max_sim_score'] = df.groupby('user_id')['sim_score'].transform('max')
-        df['list_min_sim_score'] = df.groupby('user_id')['sim_score'].transform('min')
-        df['sim_score_diff_from_avg'] = df['sim_score'] - df['list_avg_sim_score']
-        df['sim_score_diff_from_max'] = df['sim_score'] - df['list_max_sim_score']
+        _list_avg_sim_score = df.groupby('user_id')['sim_score'].transform('mean')
+        _list_max_sim_score = df.groupby('user_id')['sim_score'].transform('max')
+        df['sim_score_diff_from_avg'] = df['sim_score'] - _list_avg_sim_score
+        df['sim_score_diff_from_max'] = df['sim_score'] - _list_max_sim_score
     else:
         # 兼容缺少 sim_score 的场景
         df['list_rank'] = 1
-        df['list_avg_sim_score'] = 0
-        df['list_std_sim_score'] = 0
-        df['list_max_sim_score'] = 0
-        df['list_min_sim_score'] = 0
         df['sim_score_diff_from_avg'] = 0
         df['sim_score_diff_from_max'] = 0
 

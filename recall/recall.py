@@ -112,6 +112,7 @@ if __name__ == '__main__':
 
     recall_methods = ['itemcf', 'w2v', 'binetwork']
 
+    # 保持稳定的召回权重
     weights = {'itemcf': 1, 'binetwork': 1, 'w2v': 0.1}
     recall_list = []
     recall_dict = {}

@@ -70,30 +70,43 @@ def train_model(df_feature, df_query):
     gc.collect()
 
     ycol = 'label'
+    # 排除标签列、ID列、时间列和零重要性特征
+    exclude_cols = [
+        ycol, 'created_at_datetime', 'click_datetime', 'user_id', 'article_id',
+        # 零重要性特征（从多次日志中发现）
+        'user_click_timestamp_created_at_ts_diff_mean',
+        'user_click_timestamp_created_at_ts_diff_std',
+        'user_click_last_article_click_time',
+        'user_click_datetime_hour_std',
+        'list_min_sim_score',
+        'list_std_sim_score',
+    ]
     feature_names = list(
         filter(
-            lambda x: x not in [ycol, 'created_at_datetime', 'click_datetime', 'user_id', 'article_id'],
+            lambda x: x not in exclude_cols,
             df_train.columns))
     feature_names.sort()
 
     log.info(f'特征数量: {len(feature_names)}')
     log.debug(f'特征列表: {feature_names}')
 
-    # LambdaMART 模型配置
+    # LambdaMART 模型配置（平衡配置，避免过拟合）
     model = lgb.LGBMRanker(
-        num_leaves=64,
-        max_depth=10,
-        learning_rate=0.05,
-        n_estimators=10000,
-        subsample=0.8,
-        feature_fraction=0.8,
-        reg_alpha=0.5,
-        reg_lambda=0.5,
+        num_leaves=128,              # 适中的叶子数
+        max_depth=12,                # 适中深度
+        learning_rate=0.03,          # 适中学习率
+        n_estimators=15000,
+        subsample=0.85,
+        feature_fraction=0.85,
+        reg_alpha=0.2,
+        reg_lambda=0.2,
         random_state=seed,
         importance_type='gain',
-        metric='ndcg',  # 使用 NDCG 作为评估指标
-        objective='lambdarank',  # LambdaRank 目标函数
-        ndcg_eval_at=[5, 10, 20, 40, 50],  # 评估多个位置的 NDCG
+        metric='ndcg',
+        objective='lambdarank',
+        ndcg_eval_at=[5, 10, 20, 50],
+        min_child_samples=30,
+        lambdarank_truncation_level=30,
     )
 
     oof = []
@@ -178,7 +191,7 @@ def train_model(df_feature, df_query):
         # 新版本LightGBM使用callbacks替代verbose
         from lightgbm import early_stopping, log_evaluation
         callbacks = [
-            early_stopping(stopping_rounds=100),
+            early_stopping(stopping_rounds=150),  # 平衡的早停轮数
             log_evaluation(period=100)
         ]
         

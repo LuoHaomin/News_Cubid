@@ -27,9 +27,12 @@ def evaluate(df, total):
 
         predictions = g['article_id'].values.tolist()
 
-        rank = 0
-        while predictions[rank] != item_id:
-            rank += 1
+        # 使用 index() 方法安全查找，避免越界
+        try:
+            rank = predictions.index(item_id)
+        except ValueError:
+            # item_id 不在预测列表中，跳过该用户
+            continue
 
         if rank < 5:
             mrr_5 += 1.0 / (rank + 1)

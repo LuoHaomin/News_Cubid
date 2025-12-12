@@ -53,23 +53,24 @@ def reduce_mem_usage(df, verbose=True):
             c_min = df[col].min()
             c_max = df[col].max()
             if str(col_type)[:3] == 'int':
-                if c_min > np.iinfo(np.int8).min and c_max < np.iinfo(
+                # 使用 >= 和 <= 包含边界值（如 127 是有效的 int8）
+                if c_min >= np.iinfo(np.int8).min and c_max <= np.iinfo(
                         np.int8).max:
                     df[col] = df[col].astype(np.int8)
-                elif c_min > np.iinfo(np.int16).min and c_max < np.iinfo(
+                elif c_min >= np.iinfo(np.int16).min and c_max <= np.iinfo(
                         np.int16).max:
                     df[col] = df[col].astype(np.int16)
-                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(
+                elif c_min >= np.iinfo(np.int32).min and c_max <= np.iinfo(
                         np.int32).max:
                     df[col] = df[col].astype(np.int32)
-                elif c_min > np.iinfo(np.int64).min and c_max < np.iinfo(
+                elif c_min >= np.iinfo(np.int64).min and c_max <= np.iinfo(
                         np.int64).max:
                     df[col] = df[col].astype(np.int64)
             else:
-                if c_min > np.finfo(np.float16).min and c_max < np.finfo(
+                if c_min >= np.finfo(np.float16).min and c_max <= np.finfo(
                         np.float16).max:
                     df[col] = df[col].astype(np.float16)
-                elif c_min > np.finfo(np.float32).min and c_max < np.finfo(
+                elif c_min >= np.finfo(np.float32).min and c_max <= np.finfo(
                         np.float32).max:
                     df[col] = df[col].astype(np.float32)
                 else:
