@@ -1,0 +1,862 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[UTF8]{ctex}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% 页面设置
+\geometry{a4paper,left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{实验报告}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% 标题格式
+\titleformat{\section}{\Large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% 列表格式
+\setlist[itemize]{leftmargin=*,itemsep=0.2em,parsep=0.1em}
+\setlist[enumerate]{leftmargin=*,itemsep=0.2em,parsep=0.1em}
+
+% 行距
+\onehalfspacing
+
+% 代码格式
+\lstset{
+    basicstyle=\small\ttfamily,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray}
+}
+
+\title{实验报告}
+\author{李丁 PB23111595 \quad 罗浩民 PB23111599}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+\section{问题定义}
+
+本赛题是一个新闻推荐任务，目标是预测用户未来点击的新闻文章。数据集包含30万用户、近300万次点击记录和36万多篇不同的新闻文章。任务要求为每个用户预测Top-5最可能点击的文章，评估指标为MRR（Mean Reciprocal Rank）。
+
+\textbf{数据特点：}
+\begin{itemize}
+\item 训练集：20万用户的点击日志
+\item 测试集A：5万用户的点击日志
+\item 测试集B：5万用户的点击日志
+\item 数据包含用户点击行为、文章信息、文章embedding向量等
+\end{itemize}
+
+\textbf{挑战：}
+\begin{enumerate}
+\item 数据稀疏性：用户-文章交互矩阵非常稀疏
+\item 类别不平衡：正负样本比例约为1:196
+\item 冷启动问题：新用户和新文章的推荐
+\item 时效性：需要考虑时间因素对用户兴趣的影响
+\end{enumerate}
+
+\section{做题思路}
+
+我们采用经典的"召回+排序"两阶段推荐系统架构，通过多次迭代优化逐步提升模型性能。
+
+\subsection{整体流程}
+
+我们采用经典的"召回+排序"两阶段推荐系统架构，整体流程如下：
+
+\begin{center}
+\fbox{\parbox{0.8\textwidth}{\centering
+\textbf{数据预处理} $\rightarrow$ \textbf{召回阶段} $\rightarrow$ \textbf{特征工程} $\rightarrow$ \textbf{排序阶段} $\rightarrow$ \textbf{结果生成}
+}}
+\end{center}
+
+\begin{itemize}
+\item \textbf{召回阶段}：从海量文章中快速筛选出可能相关的候选文章（约154篇/用户）
+\item \textbf{排序阶段}：对候选文章进行精细排序，预测用户最可能点击的Top-5文章
+\end{itemize}
+
+\subsection{迭代优化过程}
+
+我们通过四次迭代逐步优化模型性能，每次迭代都有明确的改进目标：
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{2.5cm}p{4cm}p{4cm}p{2cm}}
+\toprule
+\textbf{版本} & \textbf{召回策略} & \textbf{排序策略与特征} & \textbf{MRR@5} \\
+\midrule
+第一版 & 仅ItemCF协同过滤 & LightGBM + 基础特征 & $\approx$ 0.28 \\
+\midrule
+第二版 & ItemCF + Binetwork + W2V融合 & LightGBM + 相似度特征 + 时间特征 & $\approx$ 0.30 \\
+\midrule
+第三版 & 优化融合策略（Min-Max标准化） & LightGBM + 用户行为特征 + 时间序列特征 & $\approx$ 0.31 \\
+\midrule
+第四版 & 保持多路召回融合 & LightGBM + LambdaMART + 列表级别特征 & $\approx$ 0.31 \\
+\bottomrule
+\end{tabular}
+\caption{迭代优化过程总结}
+\end{table}
+
+\textbf{关键改进点：}
+\begin{itemize}
+\item \textbf{召回阶段}：从单一方法到多路召回融合，提升召回覆盖率
+\item \textbf{特征工程}：从基础特征到30个精心设计的特征，包括相似度、时间、用户行为等
+\item \textbf{排序方法}：从Pointwise到Listwise，直接优化排序指标
+\item \textbf{工程优化}：向量化计算、交叉验证、样本权重等，提升训练效率和模型性能
+\end{itemize}
+
+\section{数据分析}
+
+\subsection{数据概览}
+
+数据集规模庞大，包含30万用户、近300万次点击记录和36万多篇不同的新闻文章。具体数据分布如下：
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lc}
+\toprule
+\textbf{数据项} & \textbf{数量/比例} \\
+\midrule
+训练集点击记录 & 1,112,623条 \\
+测试集点击记录 & 518,010条 \\
+验证集用户数 & 50,000 \\
+召回后样本数 & 13,900,088（平均每个用户召回约154篇文章） \\
+正负样本比例 & 1:196（严重不平衡） \\
+\bottomrule
+\end{tabular}
+\caption{数据概览}
+\end{table}
+
+\subsection{特征分析}
+
+我们构建了30个特征，主要分为文章基础特征、召回相似度特征、用户行为特征和列表级别特征四大类。下面用表格形式总结主要特征，便于理解：
+
+\subsubsection{文章基础特征}
+
+文章基础特征直接反映文章本身的属性，这些特征简单但有效，能帮助模型理解文章的基本信息。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5cm}p{3cm}p{6cm}}
+\toprule
+\textbf{特征名称} & \textbf{统计值} & \textbf{业务含义} \\
+\midrule
+文章字数（words\_count） & 均值200.83，中位数196 & 反映用户阅读习惯，不同用户对文章长度偏好不同（如通勤时偏好短新闻，晚上偏好长文） \\
+\midrule
+文章类别（category\_id） & - & 反映用户对不同类别文章的偏好，不同类别受欢迎程度差异大 \\
+\midrule
+文章创建时间（created\_at\_ts） & - & 反映文章时效性，新文章通常更受欢迎，但不同用户对时效性偏好不同 \\
+\bottomrule
+\end{tabular}
+\caption{文章基础特征总结}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{assets/words_count_distribution.png}
+\caption{文章字数分布}
+\end{figure}
+
+\textbf{关键发现：}从分布图可以看出，文章字数主要集中在100-300字之间，符合新闻文章的特点。正负样本的字数分布相似，说明文章长度需要与其他特征配合使用。不同类别的文章数量差异很大，某些类别的正样本比例明显高于其他类别，说明类别特征很重要。
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/words_count_distribution.png}
+\caption{文章字数分布}
+\end{subfigure}
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/category_distribution.png}
+\caption{文章类别分布}
+\end{subfigure}
+\caption{文章基础特征分布}
+\end{figure}
+
+\subsubsection{召回相似度特征}
+
+召回相似度特征是我们模型的核心，它们综合了多种召回方法的结果，反映文章与用户兴趣的匹配程度。这些特征的重要性最高，是模型判断用户是否会点击文章的关键依据。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5cm}p{3cm}p{6cm}}
+\toprule
+\textbf{特征名称} & \textbf{统计值} & \textbf{业务含义} \\
+\midrule
+召回相似度分数（sim\_score） & 均值0.1278，中位数0.0442 & \textbf{最重要的特征}，综合ItemCF、Binetwork、W2V三种方法，反映文章与用户历史兴趣的相似度。正样本平均相似度0.8901，负样本0.1206，差异明显 \\
+\midrule
+用户最后点击文章ItemCF相似度 & - & 捕捉用户\textbf{最近兴趣}，反映候选文章与用户最近阅读内容的匹配度 \\
+\midrule
+用户历史点击文章ItemCF加权相似度之和 & - & 反映用户\textbf{整体兴趣}，考虑所有历史点击，近期文章权重更高（0.7幂次衰减） \\
+\midrule
+用户最后点击文章Binetwork相似度 & - & 基于用户-文章网络结构，与ItemCF互补，能发现ItemCF发现不了的关联 \\
+\midrule
+用户最后点击文章W2V相似度 & - & 捕捉\textbf{语义相似性}，发现内容相似但用户群体不同的文章 \\
+\midrule
+用户最近2篇点击文章W2V相似度之和 & - & 综合反映候选文章与用户最近阅读内容的语义匹配程度 \\
+\bottomrule
+\end{tabular}
+\caption{召回相似度特征总结}
+\end{table}
+
+\textbf{关键发现：}相似度分数呈现明显的长尾分布，大部分文章相似度较低，只有少数文章相似度很高。\textbf{正样本的平均相似度分数（0.8901）远高于负样本（0.1206）}，说明相似度分数是强信号，验证了召回阶段的有效性。
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/sim_score_distribution.png}
+\caption{相似度分数分布}
+\end{subfigure}
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/sim_score_pos_neg_comparison.png}
+\caption{正负样本对比}
+\end{subfigure}
+\caption{召回相似度特征分析}
+\end{figure}
+
+\subsubsection{用户行为特征}
+
+用户行为特征反映用户的活跃度、偏好和阅读习惯，帮助我们理解不同用户的行为模式。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5cm}p{7cm}}
+\toprule
+\textbf{特征名称} & \textbf{业务含义} \\
+\midrule
+用户点击文章数量（user\_id\_cnt） & 反映用户活跃程度，活跃用户和沉默用户的点击行为模式不同 \\
+\midrule
+文章被点击次数（article\_id\_cnt） & 反映文章热度，热门文章更容易被点击，但需要平衡热门度和多样性 \\
+\midrule
+用户-类别点击次数（user\_id\_category\_id\_cnt） & 反映用户对特定类别的偏好程度，比单纯类别特征更精细 \\
+\bottomrule
+\end{tabular}
+\caption{用户统计特征}
+\end{table}
+
+\textbf{时间相关特征：}新闻推荐中时间因素非常重要，我们构建了多个时间特征来捕捉用户的时效性偏好。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5cm}p{7cm}}
+\toprule
+\textbf{特征名称} & \textbf{业务含义} \\
+\midrule
+候选文章创建时间与用户最后点击时间的差值 & 反映文章新鲜度，时间差小说明文章刚发布，时间差大可能已过时 \\
+\midrule
+候选文章与用户最后点击文章创建时间的差值 & 反映候选文章与用户最近阅读文章的新鲜度对比 \\
+\midrule
+用户连续两次点击的平均时间间隔 & 反映用户阅读节奏，帮助判断现在推荐文章是否合适 \\
+\midrule
+用户点击时间与文章创建时间的差值（均值/标准差） & 均值反映用户通常看多新的文章，标准差反映偏好稳定性 \\
+\midrule
+用户点击时间的小时标准差 & 反映阅读时间规律性，标准差小说明阅读时间集中 \\
+\bottomrule
+\end{tabular}
+\caption{时间相关特征}
+\end{table}
+
+\textbf{文章内容特征：}这些特征反映用户对文章内容属性的偏好。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{5cm}p{7cm}}
+\toprule
+\textbf{特征名称} & \textbf{业务含义} \\
+\midrule
+用户历史点击文章的平均字数 & 反映用户对文章长度的长期偏好 \\
+\midrule
+用户最后点击文章的字数 & 反映用户对文章长度的最近偏好，与平均字数配合捕捉长期和短期变化 \\
+\midrule
+候选文章字数与用户最后点击文章字数的差值 & 反映文章长度变化幅度，帮助判断用户是否能接受长度变化 \\
+\bottomrule
+\end{tabular}
+\caption{文章内容特征}
+\end{table}
+
+\textbf{关键发现：}字数差值主要集中在0附近，说明大部分候选文章的长度和用户最近看的文章长度相近，符合用户阅读习惯：用户通常会在相似长度的文章之间切换。
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/user_click_count_distribution.png}
+\caption{用户点击数量分布}
+\end{subfigure}
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/user_click_interval_distribution.png}
+\caption{用户点击时间间隔}
+\end{subfigure}
+\caption{用户行为特征分析}
+\end{figure}
+
+\subsubsection{标签分布与特征相关性}
+
+\textbf{正负样本分布：}数据分布严重不平衡，正样本（用户点击的文章）只占0.23\%，负样本占99.77\%，比例接近1:200。这种不平衡在推荐系统中很常见，因为召回阶段会给每个用户召回很多候选文章，但用户只会点击其中的一小部分。我们通过设置正样本权重（scale\_pos\_weight=10）来处理这种不平衡。
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{样本类型} & \textbf{数量} & \textbf{比例} \\
+\midrule
+正样本 & 40,884 & 0.23\% \\
+负样本 & 8,009,580 & 99.77\% \\
+\midrule
+\textbf{总计} & \textbf{8,050,464} & \textbf{100\%} \\
+\bottomrule
+\end{tabular}
+\caption{正负样本分布}
+\end{table}
+
+\textbf{特征相关性分析：}从特征相关性热力图可以看出：
+
+\begin{itemize}
+\item \textbf{相似度特征之间相关性较高}：ItemCF、Binetwork、W2V等相似度特征存在一定相关性，但可以互补
+\item \textbf{时间特征相关性较低}：时间相关特征与其他特征相关性低，提供了独立信息
+\item \textbf{用户行为特征相关性适中}：与相似度特征有一定相关性，但提供了额外信息
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{assets/feature_correlation_heatmap.png}
+\caption{特征相关性热力图}
+\end{figure}
+
+\section{模型设计}
+
+\subsection{召回阶段}
+
+我们采用多路召回策略，融合三种召回方法，从不同角度发现用户可能感兴趣的文章：
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{3cm}p{5cm}cc}
+\toprule
+\textbf{召回方法} & \textbf{原理} & \textbf{HitRate@50} & \textbf{MRR@50} \\
+\midrule
+ItemCF（基于物品的协同过滤） & 计算物品之间的相似度，推荐与用户历史点击物品相似的文章 & 0.70 & 0.238 \\
+\midrule
+Binetwork（二分网络） & 基于用户-物品二分网络结构，计算物品相似度 & 0.61 & 0.238 \\
+\midrule
+Word2Vec（词向量） & 将用户点击序列视为句子，训练Word2Vec模型，计算文章相似度 & 0.31 & 0.083 \\
+\bottomrule
+\end{tabular}
+\caption{召回方法对比}
+\end{table}
+
+\textbf{召回融合策略：}
+\begin{itemize}
+\item 对每种召回方法的相似度分数进行Min-Max标准化（将不同方法的分数统一到0-1范围）
+\item 加权融合：\texttt{sim\_score = itemcf\_score + binetwork\_score + w2v\_score}
+\item \textbf{最终召回指标}：HitRate@50=0.70, MRR@50=0.261（融合后性能优于单一方法）
+\end{itemize}
+
+\subsection{排序阶段}
+
+排序学习（Learning to Rank, LTR）是信息检索和推荐系统中的核心问题，目标是根据查询（用户）对文档（物品）的相关性进行排序。根据训练数据的标注方式，排序学习可以分为三类：
+
+\textbf{1. Pointwise方法}
+\begin{itemize}
+\item \textbf{原理}：将排序问题转化为分类或回归问题，对每个样本独立预测其相关性分数
+\item \textbf{优点}：实现简单，可以使用成熟的分类/回归算法
+\item \textbf{缺点}：忽略了样本之间的相对顺序关系，无法直接优化排序指标
+\item \textbf{代表算法}：LightGBM分类器、逻辑回归、SVM等
+\end{itemize}
+
+\textbf{2. Pairwise方法}
+\begin{itemize}
+\item \textbf{原理}：将排序问题转化为样本对的二分类问题，学习判断两个样本的相对顺序
+\item \textbf{优点}：考虑了样本之间的相对关系，更符合排序的本质
+\item \textbf{缺点}：样本对数量庞大（O(n²)），训练复杂度高
+\item \textbf{代表算法}：RankNet、LambdaRank等
+\end{itemize}
+
+\textbf{3. Listwise方法}
+\begin{itemize}
+\item \textbf{原理}：直接优化整个列表的排序质量，使用排序指标（如NDCG）作为损失函数
+\item \textbf{优点}：直接优化排序指标，理论上性能最优
+\item \textbf{缺点}：实现复杂，计算开销大
+\item \textbf{代表算法}：LambdaMART、ListNet等
+\end{itemize}
+
+\textbf{LambdaMART原理}
+
+LambdaMART是结合LambdaRank和MART（Multiple Additive Regression Trees）的排序算法：
+
+\begin{enumerate}
+\item \textbf{LambdaRank思想}：通过定义梯度（Lambda）来直接优化NDCG等排序指标
+  \begin{itemize}
+  \item 对于每个样本对(i,j)，如果i的相关性高于j，则i的Lambda增加，j的Lambda减少
+  \item Lambda的大小与交换位置后NDCG的提升成正比
+  \end{itemize}
+
+\item \textbf{MART实现}：使用梯度提升树（GBDT）来拟合Lambda梯度
+  \begin{itemize}
+  \item 每棵树预测Lambda值，多棵树累加得到最终排序分数
+  \item 通过梯度提升逐步优化排序性能
+  \end{itemize}
+
+\item \textbf{优势}：
+  \begin{itemize}
+  \item 直接优化NDCG等排序指标，理论上性能优于Pointwise方法
+  \item 使用GBDT实现，继承了树模型的优点（特征交互、非线性建模）
+  \item 训练效率高，支持大规模数据
+  \end{itemize}
+\end{enumerate}
+
+我们对比了两种排序方法：Pointwise（LightGBM）和Listwise（LambdaMART）。
+
+\subsubsection{方法一：LightGBM（Pointwise）}
+
+\textbf{理论原理：}
+
+LightGBM是一个基于梯度提升决策树（GBDT）的框架，我们将其作为Pointwise排序方法使用：
+
+\begin{enumerate}
+\item \textbf{Pointwise排序}：将排序问题转化为二分类问题
+  \begin{itemize}
+  \item 正样本：用户点击的文章（label=1）
+  \item 负样本：用户未点击的文章（label=0）
+  \item 模型输出：文章被点击的概率
+  \end{itemize}
+
+\item \textbf{LightGBM优势}：
+  \begin{itemize}
+  \item \textbf{直方图算法}：将连续特征离散化，减少内存和计算开销
+  \item \textbf{Leaf-wise生长}：只分裂增益最大的叶子节点，相比Level-wise更高效
+  \item \textbf{特征并行和数据并行}：支持分布式训练
+  \item \textbf{类别特征支持}：原生支持类别特征，无需one-hot编码
+  \end{itemize}
+
+\item \textbf{理论性能分析}：
+  \begin{itemize}
+  \item \textbf{优点}：实现简单，训练速度快，特征重要性可解释
+  \item \textbf{缺点}：无法直接优化排序指标（如NDCG），只能间接通过分类准确率优化
+  \item \textbf{适用场景}：数据量大、特征维度高、需要快速迭代的场景
+  \end{itemize}
+\end{enumerate}
+
+\textbf{实际配置：}
+
+\begin{lstlisting}[language=Python, frame=tb, caption=LightGBM配置参数]
+lgb.LGBMClassifier(
+    num_leaves=64,              # 叶子节点数，控制模型复杂度
+    max_depth=10,               # 树的最大深度，防止过拟合
+    learning_rate=0.05,         # 学习率，控制每棵树的贡献
+    n_estimators=10000,         # 最大迭代次数
+    subsample=0.8,              # 行采样比例，防止过拟合
+    feature_fraction=0.8,        # 特征采样比例，增加随机性
+    reg_alpha=0.5,              # L1正则化
+    reg_lambda=0.5,             # L2正则化
+    scale_pos_weight=10,        # 正样本权重，处理类别不平衡（1:196）
+    min_child_samples=100,      # 叶子节点最小样本数，防止过拟合
+)
+\end{lstlisting}
+
+\textbf{配置说明：}
+\begin{itemize}
+\item \textbf{scale\_pos\_weight=10}：由于正负样本比例为1:196，设置正样本权重为10，平衡样本分布
+\item \textbf{早停机制}：使用\texttt{early\_stopping(stopping\_rounds=100)}，验证集性能不再提升时停止训练
+\item \textbf{交叉验证}：使用\texttt{GroupKFold(n\_splits=5)}按用户分组，避免同一用户出现在训练集和验证集
+\end{itemize}
+
+\textbf{特征重要性Top 10：}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clc}
+\toprule
+\textbf{排名} & \textbf{特征名称} & \textbf{重要性分数} \\
+\midrule
+1 & sim\_score & 767,792 \\
+2 & user\_last\_click\_timestamp\_diff & 237,118 \\
+3 & user\_last\_click\_article\_itemcf\_sim & 155,210 \\
+4 & user\_last\_click\_article\_w2v\_sim & 91,132 \\
+5 & article\_id\_cnt & 79,432 \\
+6 & user\_clicked\_article\_itemcf\_sim\_sum & 69,579 \\
+7 & user\_last\_click\_created\_at\_ts\_diff & 53,313 \\
+8 & user\_last\_click\_article\_binetwork\_sim & 43,189 \\
+9 & user\_click\_timestamp\_created\_at\_ts\_diff\_mean & 29,134 \\
+10 & user\_click\_article\_w2w\_sim\_sum\_2 & 24,231 \\
+\bottomrule
+\end{tabular}
+\caption{LightGBM特征重要性Top 10}
+\end{table}
+
+\textbf{训练结果（5折交叉验证）：}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{指标} & \textbf{@5} & \textbf{@10} & \textbf{@20} & \textbf{@40} & \textbf{@50} \\
+\midrule
+HitRate & 0.46 & 0.59 & 0.70 & 0.77 & 0.78 \\
+MRR & 0.281 & 0.298 & 0.306 & 0.309 & 0.309 \\
+\bottomrule
+\end{tabular}
+\caption{LightGBM训练结果}
+\end{table}
+
+\textbf{训练时间：} 每个fold约76秒，总计约6.3分钟
+
+\textbf{理论性能 vs 实际性能：}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+方面 & 理论预期 & 实际表现 & 分析 \\
+\midrule
+训练速度 & 快速（直方图算法） & 6.3分钟（5折） & \textcolor{green}{✅ 符合预期，训练效率高} \\
+内存占用 & 低（离散化特征） & 适中 & \textcolor{green}{✅ 符合预期} \\
+排序性能 & 中等（间接优化） & MRR@5=0.281 & \textcolor{orange}{⚠ 无法直接优化排序指标} \\
+特征重要性 & 可解释 & 清晰（sim\_score最重要） & \textcolor{green}{✅ 符合预期} \\
+过拟合风险 & 中等（需正则化） & 通过早停和正则化控制 & \textcolor{green}{✅ 控制良好} \\
+\bottomrule
+\end{tabular}
+\caption{LightGBM理论性能 vs 实际性能}
+\end{table}
+
+\subsubsection{方法二：LambdaMART（Listwise）}
+
+\textbf{理论原理：}
+
+LambdaMART是结合LambdaRank和MART的排序算法，属于Listwise方法：
+
+\begin{enumerate}
+\item \textbf{LambdaRank核心思想}：
+  \begin{itemize}
+  \item 定义每个样本的Lambda梯度，直接优化NDCG等排序指标
+  \item Lambda值反映交换两个样本位置后NDCG的变化
+  \item 对于相关文档，如果排在无关文档后面，Lambda会增大，促使模型提升其分数
+  \end{itemize}
+
+\item \textbf{MART实现}：
+  \begin{itemize}
+  \item 使用梯度提升树拟合Lambda梯度
+  \item 每棵树预测Lambda值，多棵树累加得到最终排序分数
+  \item 通过梯度提升逐步优化排序性能
+  \end{itemize}
+
+\item \textbf{理论优势}：
+  \begin{itemize}
+  \item \textbf{直接优化排序指标}：相比Pointwise方法，直接优化NDCG，理论上性能更优
+  \item \textbf{考虑列表上下文}：能够利用列表级别的信息（如列表大小、多样性等）
+  \item \textbf{梯度提升优势}：继承了GBDT的优点（特征交互、非线性建模）
+  \end{itemize}
+
+\item \textbf{理论性能分析}：
+  \begin{itemize}
+  \item \textbf{优点}：直接优化排序指标，理论上性能最优；支持列表级别特征
+  \item \textbf{缺点}：实现复杂，需要group信息；训练时间可能较长
+  \item \textbf{适用场景}：对排序性能要求高、有列表级别特征的场景
+  \end{itemize}
+\end{enumerate}
+
+\textbf{实际配置：}
+
+\begin{lstlisting}[language=Python, frame=tb, caption=LambdaMART配置参数]
+lgb.LGBMRanker(
+    num_leaves=128,              # 更大的叶子数，增加模型容量
+    max_depth=12,                # 更深的树，捕捉复杂特征交互
+    learning_rate=0.03,          # 更小的学习率，更稳定的训练
+    n_estimators=15000,          # 更多迭代次数
+    subsample=0.85,              # 行采样
+    feature_fraction=0.85,       # 特征采样
+    reg_alpha=0.2,               # 较小的正则化，允许更复杂的模型
+    reg_lambda=0.2,
+    objective='lambdarank',      # 使用lambdarank目标函数
+    metric='ndcg',               # 评估指标为NDCG
+    ndcg_eval_at=[5, 10, 20, 50], # NDCG计算位置
+    lambdarank_truncation_level=30, # Lambda计算时的截断级别
+)
+\end{lstlisting}
+
+\textbf{配置说明：}
+\begin{itemize}
+\item \textbf{objective='lambdarank'}：使用LambdaRank目标函数，直接优化NDCG
+\item \textbf{group信息}：需要提供每个用户的样本数量，用于计算NDCG
+\item \textbf{lambdarank\_truncation\_level=30}：只考虑前30个位置的样本对，减少计算量
+\item \textbf{更大的模型容量}：相比LGB，使用更多的叶子节点和更深的树，以捕捉复杂的排序模式
+\end{itemize}
+
+\textbf{特征重要性Top 10：}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clc}
+\toprule
+\textbf{排名} & \textbf{特征名称} & \textbf{重要性分数} \\
+\midrule
+1 & sim\_score\_diff\_from\_avg & 952,547 \\
+2 & sim\_score & 427,483 \\
+3 & user\_last\_click\_timestamp\_diff & 278,883 \\
+4 & user\_last\_click\_article\_w2v\_sim & 127,883 \\
+5 & article\_id\_cnt & 88,222 \\
+6 & list\_rank & 72,591 \\
+7 & user\_last\_click\_created\_at\_ts\_diff & 50,636 \\
+8 & user\_clicked\_article\_itemcf\_sim\_sum & 46,088 \\
+9 & user\_last\_click\_article\_itemcf\_sim & 36,868 \\
+10 & user\_last\_click\_article\_binetwork\_sim & 28,220 \\
+\bottomrule
+\end{tabular}
+\caption{LambdaMART特征重要性Top 10}
+\end{table}
+
+\textbf{训练结果（5折交叉验证）：}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{指标} & \textbf{@5} & \textbf{@10} & \textbf{@20} & \textbf{@40} & \textbf{@50} \\
+\midrule
+HitRate & 0.46 & 0.59 & 0.70 & 0.77 & 0.78 \\
+MRR & 0.282 & 0.300 & 0.307 & 0.310 & 0.310 \\
+\bottomrule
+\end{tabular}
+\caption{LambdaMART训练结果}
+\end{table}
+
+\textbf{训练时间：} 每个fold约35-40秒，总计约3.2分钟
+
+
+\textbf{列表级别特征分析：}
+
+LambdaMART能够有效利用列表级别特征，这些特征是Listwise方法独有的，Pointwise方法很难利用。这些特征帮助模型在列表内部进行比较，找到真正相对更好的文章。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{4cm}cp{7cm}}
+\toprule
+\textbf{特征名称} & \textbf{重要性} & \textbf{业务含义} \\
+\midrule
+sim\_score\_diff\_from\_avg & 952,547 & \textbf{最重要的列表特征}。反映文章在候选列表中的相对位置（相对相似度），而非绝对相似度。因为不同用户的候选列表质量不同，相对位置比绝对位置更重要。让模型能在列表内部比较，找到真正相对更好的文章。 \\
+\midrule
+list\_rank & 72,591 & 反映召回阶段对文章的置信度。排名越靠前，说明召回算法认为越相关。让排序模型能参考召回阶段的判断。 \\
+\midrule
+sim\_score\_diff\_from\_max & 24,062 & 反映候选文章与最佳候选的差距。帮助判断文章在列表中的相对质量，差距太大可能不值得推荐。 \\
+\bottomrule
+\end{tabular}
+\caption{列表级别特征分析}
+\end{table}
+
+\subsubsection{模型对比分析}
+
+\textbf{理论对比：}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+维度 & LightGBM (Pointwise) & LambdaMART (Listwise) & 理论优势 \\
+\midrule
+优化目标 & 分类准确率 & NDCG等排序指标 & LambdaMART \textcolor{green}{✅} \\
+样本关系 & 独立处理 & 考虑列表上下文 & LambdaMART \textcolor{green}{✅} \\
+列表特征 & 难以利用 & 天然支持 & LambdaMART \textcolor{green}{✅} \\
+实现复杂度 & 简单 & 复杂 & LightGBM \textcolor{green}{✅} \\
+训练速度 & 快 & 中等 & LightGBM \textcolor{green}{✅} \\
+可解释性 & 好 & 中等 & LightGBM \textcolor{green}{✅} \\
+\bottomrule
+\end{tabular}
+\caption{LightGBM vs LambdaMART理论对比}
+\end{table}
+
+\textbf{实际性能对比：}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+指标 & LightGBM & LambdaMART & 差异 & 理论符合度 \\
+\midrule
+MRR@5 & 0.281 & 0.282 & +0.001 & \textcolor{green}{✅ 符合（Listwise略优）} \\
+MRR@10 & 0.298 & 0.300 & +0.002 & \textcolor{green}{✅ 符合} \\
+MRR@20 & 0.306 & 0.307 & +0.001 & \textcolor{green}{✅ 符合} \\
+MRR@50 & 0.309 & 0.310 & +0.001 & \textcolor{green}{✅ 符合} \\
+训练时间 & 6.3分钟 & 3.2分钟 & -49\% & \textcolor{red}{❌ 意外（LambdaMART更快）} \\
+\bottomrule
+\end{tabular}
+\caption{LightGBM vs LambdaMART实际性能对比}
+\end{table}
+
+\textbf{性能差异分析：}
+
+\begin{enumerate}
+\item \textbf{排序性能}：LambdaMART略优于LightGBM（+0.1-0.2\%），符合理论预期
+  \begin{itemize}
+  \item \textbf{原因分析}：LambdaMART直接优化NDCG，而LightGBM只能间接优化
+  \item \textbf{提升幅度小}：可能因为特征工程已经很好，两种方法都能学到有效的排序模式
+  \end{itemize}
+
+\item \textbf{训练速度}：LambdaMART反而更快（-49\%），与理论预期不符
+  \begin{itemize}
+  \item \textbf{可能原因}：
+    \begin{itemize}
+    \item LambdaMART使用了\texttt{lambdarank\_truncation\_level=30}，只计算前30个位置的Lambda，减少了计算量
+    \item LightGBM需要计算所有样本的概率，而LambdaMART只需要计算排序分数
+    \item 数据分布可能使得LambdaMART的梯度计算更高效
+    \end{itemize}
+  \end{itemize}
+
+\item \textbf{特征重要性差异}：
+  \begin{itemize}
+  \item \textbf{LightGBM}：最关注\texttt{sim\_score}（绝对相似度）
+  \item \textbf{LambdaMART}：最关注\texttt{sim\_score\_diff\_from\_avg}（相对相似度）
+  \item \textbf{结论}：LambdaMART更善于利用列表上下文信息，体现了Listwise方法的优势
+  \end{itemize}
+\end{enumerate}
+
+\textbf{结论：}
+\begin{enumerate}
+\item \textbf{性能对比}：LambdaMART在各项指标上略优于LightGBM，符合理论预期（直接优化排序指标）
+\item \textbf{训练效率}：LambdaMART训练速度更快，超出理论预期（可能由于截断级别优化）
+\item \textbf{特征利用}：LambdaMART更关注列表级别特征（如sim\_score\_diff\_from\_avg、list\_rank），体现了listwise方法的优势
+\item \textbf{最终选择}：由于LambdaMART性能略优且训练更快，我们选择LambdaMART作为最终模型
+\item \textbf{理论验证}：实际结果验证了Listwise方法在排序任务上的理论优势，虽然提升幅度较小，但在大规模推荐系统中，即使是0.1\%的提升也具有重要价值
+\end{enumerate}
+
+\section{训练}
+
+\subsection{训练流程}
+
+训练流程包括数据预处理、召回、特征工程、模型训练和预测五个阶段，总耗时约14-17分钟。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{3cm}cp{6cm}}
+\toprule
+\textbf{阶段} & \textbf{耗时} & \textbf{主要内容} \\
+\midrule
+数据预处理 & 约2分钟 & 加载点击日志、划分验证集（50,000用户）、数据清洗和格式转换 \\
+\midrule
+召回阶段 & 约3分钟 & ItemCF召回（82秒）、Binetwork召回（23秒）、W2V召回（23秒）、召回融合（47秒） \\
+\midrule
+特征工程 & 约5分钟 & 基础特征、相似度特征、时间特征、Listwise特征（共30个特征） \\
+\midrule
+模型训练 & 3-6分钟 & LightGBM（5折，6.3分钟）或LambdaMART（5折，3.2分钟） \\
+\midrule
+预测和提交 & 约1分钟 & 生成预测结果、格式转换和保存 \\
+\midrule
+\textbf{总计} & \textbf{14-17分钟} & \textbf{离线验证模式} \\
+\bottomrule
+\end{tabular}
+\caption{训练流程与时间统计}
+\end{table}
+
+\subsection{关键优化点}
+
+我们在训练过程中采用了多项优化策略，显著提升了训练效率和模型性能：
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{3.5cm}p{8cm}}
+\toprule
+\textbf{优化策略} & \textbf{效果说明} \\
+\midrule
+向量化计算 & 将相似度特征计算从apply改为向量化，速度提升10-50倍 \\
+\midrule
+交叉验证 & 使用GroupKFold按用户划分，避免同一用户出现在训练集和验证集，防止数据泄露 \\
+\midrule
+早停机制 & 设置early\_stopping（stopping\_rounds=100），验证集性能不再提升时停止训练，避免过拟合 \\
+\midrule
+样本权重 & 使用scale\_pos\_weight=10处理类别不平衡（正负样本比例1:196） \\
+\midrule
+特征缓存 & 保存特征文件，避免重复计算，提升迭代效率 \\
+\bottomrule
+\end{tabular}
+\caption{关键优化策略}
+\end{table}
+
+\section{比赛排名}
+
+（待填写）
+
+\section{团队成员分工}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lc}
+\toprule
+成员 & 主要职责 \\
+\midrule
+李丁 & 特征提取、召回算法实现与优化 \\
+罗浩民 & 排序模型设计与优化、实验报告撰写 \\
+\bottomrule
+\end{tabular}
+\caption{团队成员分工}
+\end{table}
+
+\section{个人总结和感悟}
+
+\subsection{技术收获}
+
+\begin{enumerate}
+\item \textbf{推荐系统架构}：深入理解了"召回+排序"两阶段推荐系统的设计和实现
+\item \textbf{特征工程}：学会了如何从用户行为数据中提取有效特征，特别是时间序列特征和交互特征
+\item \textbf{模型对比}：通过对比Pointwise和Listwise方法，理解了不同排序学习范式的优缺点
+\item \textbf{性能优化}：掌握了向量化计算、并行处理等优化技巧
+\end{enumerate}
+
+\subsection{经验教训}
+
+\begin{enumerate}
+\item \textbf{迭代优化的重要性}：通过多次迭代，逐步提升模型性能，每次迭代都有明确的改进目标
+\item \textbf{特征工程是关键}：好的特征比复杂的模型更重要，sim\_score等召回特征贡献了最大的重要性
+\item \textbf{处理不平衡数据}：类别不平衡是推荐系统的常见问题，需要合理设置样本权重
+\item \textbf{计算效率优化}：向量化计算可以大幅提升特征工程效率，值得投入时间优化
+\end{enumerate}
+
+\subsection{未来改进方向}
+
+\begin{enumerate}
+\item \textbf{深度学习方法}：尝试使用深度神经网络（如DeepFM、Wide\&Deep）进一步提升性能
+\item \textbf{实时特征}：增加实时特征，如用户当前会话信息、实时热门文章等
+\item \textbf{多目标优化}：不仅优化点击率，还可以考虑多样性、新颖性等指标
+\item \textbf{模型融合}：尝试融合多个模型（如LGB + LambdaMART + 深度学习模型）进一步提升性能
+\end{enumerate}
+
+\end{document}
