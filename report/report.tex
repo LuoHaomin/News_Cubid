@@ -176,13 +176,6 @@
 \end{tabular}
 \end{table}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.8\textwidth]{assets/words_count_distribution.png}
-\caption{文章字数分布}
-\end{figure}
-
-\textbf{关键发现：}从分布图可以看出，文章字数主要集中在100-300字之间，符合新闻文章的特点。正负样本的字数分布相似，说明文章长度需要与其他特征配合使用。不同类别的文章数量差异很大，某些类别的正样本比例明显高于其他类别，说明类别特征很重要。
 
 \begin{figure}[H]
 \centering
@@ -197,6 +190,30 @@
 \caption{文章类别分布}
 \end{subfigure}
 \caption{文章基础特征分布}
+\end{figure}
+
+\textbf{关键发现：}从分布图可以看出，文章字数主要集中在100-300字之间，符合新闻文章的特点。正负样本的字数分布相似，说明文章长度需要与其他特征配合使用。不同类别的文章数量差异很大，某些类别的正样本比例明显高于其他类别，说明类别特征很重要。
+
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{assets/article_creation_time_distribution.png}
+\caption{文章创建时间分布}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/words_count_pos_neg_comparison.png}
+\caption{文章字数正负样本对比}
+\end{subfigure}
+\begin{subfigure}{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/category_pos_neg_comparison.png}
+\caption{文章类别正负样本对比}
+\end{subfigure}
+\caption{文章基础特征在正负样本上的分布对比}
 \end{figure}
 
 \subsubsection{召回相似度特征}
@@ -241,6 +258,26 @@
 \caption{正负样本对比}
 \end{subfigure}
 \caption{召回相似度特征分析}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/itemcf_sim_distribution.png}
+\caption{ItemCF相似度分布}
+\end{subfigure}
+\begin{subfigure}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/binetwork_sim_distribution.png}
+\caption{Binetwork相似度分布}
+\end{subfigure}
+\begin{subfigure}{0.32\textwidth}
+\centering
+\includegraphics[width=\textwidth]{assets/w2v_sim_distribution.png}
+\caption{W2V相似度分布}
+\end{subfigure}
+\caption{不同相似度特征分布比较}
 \end{figure}
 
 \subsubsection{用户行为特征}
@@ -310,6 +347,12 @@
 
 \begin{figure}[H]
 \centering
+\includegraphics[width=0.8\textwidth]{assets/words_count_diff_distribution.png}
+\caption{候选文章与最近点击文章字数差值分布}
+\end{figure}
+
+\begin{figure}[H]
+\centering
 \begin{subfigure}{0.48\textwidth}
 \centering
 \includegraphics[width=\textwidth]{assets/user_click_count_distribution.png}
@@ -341,6 +384,12 @@
 \bottomrule
 \end{tabular}
 \end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{assets/label_distribution.png}
+\caption{正负样本数量分布}
+\end{figure}
 
 \textbf{特征相关性分析：}从特征相关性热力图可以看出：
 

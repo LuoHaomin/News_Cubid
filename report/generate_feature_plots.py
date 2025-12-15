@@ -54,6 +54,8 @@ def main():
         plt.xlabel('Article Word Count', fontsize=12, fontproperties=FONT_PROP)
         plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
         plt.title('Distribution of Article Word Count', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
+        # 使用对数刻度，使长尾分布更易观察
+        plt.yscale('log')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'words_count_distribution.png'), dpi=300, bbox_inches='tight')
@@ -94,11 +96,18 @@ def main():
         time_diff = df_feature['user_last_click_timestamp_diff'].dropna()
         # Filter outliers
         time_diff = time_diff[(time_diff >= -1e10) & (time_diff <= 1e10)]
-        plt.hist(time_diff, bins=50, edgecolor='black', alpha=0.7)
-        plt.xlabel('User Last Click Time Difference (s)', fontsize=12, fontproperties=FONT_PROP)
-        plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
+        # Convert to days for better readability
+        time_diff_days = time_diff / (24 * 3600)
+        # Filter to reasonable range (-30 to 30 days) for better visualization
+        time_diff_days = time_diff_days[(time_diff_days >= -30) & (time_diff_days <= 30)]
+        plt.hist(time_diff_days, bins=60, edgecolor='black', alpha=0.7)
+        plt.xlabel('User Last Click Time Difference (days)', fontsize=12, fontproperties=FONT_PROP)
+        plt.ylabel('Frequency (log scale)', fontsize=12, fontproperties=FONT_PROP)
+        plt.yscale('log')  # Use log scale for y-axis to handle long tail
         plt.title('Distribution of User Last Click Time Difference', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
-        plt.grid(True, alpha=0.3)
+        plt.axvline(x=0, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label='No difference')
+        plt.legend()
+        plt.grid(True, alpha=0.3, which='both')
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'user_last_click_timestamp_diff.png'), dpi=300, bbox_inches='tight')
         plt.close()
@@ -127,6 +136,7 @@ def main():
         plt.xlabel('User Click Count', fontsize=12, fontproperties=FONT_PROP)
         plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
         plt.title('Distribution of User Click Count (within 95th percentile)', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
+        plt.yscale('log')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'user_click_count_distribution.png'), dpi=300, bbox_inches='tight')
@@ -142,6 +152,7 @@ def main():
         plt.xlabel('Article Click Count', fontsize=12, fontproperties=FONT_PROP)
         plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
         plt.title('Distribution of Article Click Count (within 95th percentile)', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
+        plt.yscale('log')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'article_click_count_distribution.png'), dpi=300, bbox_inches='tight')
@@ -177,11 +188,15 @@ def main():
         # Convert to days since min time for better visualization
         min_time = created_time.min()
         days_since_min = (created_time - min_time) / (24 * 3600)
-        plt.hist(days_since_min, bins=50, edgecolor='black', alpha=0.7)
+        # Filter to 99th percentile to remove extreme outliers for better visualization
+        q99 = days_since_min.quantile(0.99)
+        days_since_min_filtered = days_since_min[days_since_min <= q99]
+        plt.hist(days_since_min_filtered, bins=80, edgecolor='black', alpha=0.7)
         plt.xlabel('Days Since Minimum Creation Time', fontsize=12, fontproperties=FONT_PROP)
-        plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
+        plt.ylabel('Frequency (log scale)', fontsize=12, fontproperties=FONT_PROP)
+        plt.yscale('log')  # Use log scale for y-axis to handle long tail
         plt.title('Distribution of Article Creation Time', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
-        plt.grid(True, alpha=0.3)
+        plt.grid(True, alpha=0.3, which='both')
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'article_creation_time_distribution.png'), dpi=300, bbox_inches='tight')
         plt.close()
@@ -228,6 +243,7 @@ def main():
         plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
         plt.title('Word Count Distribution: Positive vs Negative Samples', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
         plt.legend()
+        plt.yscale('log')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'words_count_pos_neg_comparison.png'), dpi=300, bbox_inches='tight')
@@ -247,6 +263,7 @@ def main():
         plt.ylabel('Frequency', fontsize=12, fontproperties=FONT_PROP)
         plt.title('Similarity Score Distribution: Positive vs Negative Samples', fontsize=14, fontweight='bold', fontproperties=FONT_PROP)
         plt.legend()
+        plt.yscale('log')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, 'sim_score_pos_neg_comparison.png'), dpi=300, bbox_inches='tight')
