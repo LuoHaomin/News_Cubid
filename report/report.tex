@@ -104,6 +104,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{迭代优化过程总结}
 \begin{tabular}{p{2.5cm}p{4cm}p{4cm}p{2cm}}
 \toprule
 \textbf{版本} & \textbf{召回策略} & \textbf{排序策略与特征} & \textbf{MRR@5} \\
@@ -117,7 +118,6 @@
 第四版 & 保持多路召回融合 & LightGBM + LambdaMART + 列表级别特征 & $\approx$ 0.31 \\
 \bottomrule
 \end{tabular}
-\caption{迭代优化过程总结}
 \end{table}
 
 \textbf{关键改进点：}
@@ -137,6 +137,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{数据概览}
 \begin{tabular}{lc}
 \toprule
 \textbf{数据项} & \textbf{数量/比例} \\
@@ -148,7 +149,6 @@
 正负样本比例 & 1:196（严重不平衡） \\
 \bottomrule
 \end{tabular}
-\caption{数据概览}
 \end{table}
 
 \subsection{特征分析}
@@ -162,18 +162,18 @@
 \begin{table}[H]
 \centering
 \small
+\caption{文章基础特征总结}
 \begin{tabular}{p{5cm}p{3cm}p{6cm}}
 \toprule
 \textbf{特征名称} & \textbf{统计值} & \textbf{业务含义} \\
 \midrule
-文章字数（words\_count） & 均值200.83，中位数196 & 反映用户阅读习惯，不同用户对文章长度偏好不同（如通勤时偏好短新闻，晚上偏好长文） \\
+文章字数（words\_count） & 均值200.83，中位数196 & 反映用户阅读习惯，不同用户对文章长度偏好不同 \\
 \midrule
 文章类别（category\_id） & - & 反映用户对不同类别文章的偏好，不同类别受欢迎程度差异大 \\
 \midrule
 文章创建时间（created\_at\_ts） & - & 反映文章时效性，新文章通常更受欢迎，但不同用户对时效性偏好不同 \\
 \bottomrule
 \end{tabular}
-\caption{文章基础特征总结}
 \end{table}
 
 \begin{figure}[htbp]
@@ -206,6 +206,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{召回相似度特征总结}
 \begin{tabular}{p{5cm}p{3cm}p{6cm}}
 \toprule
 \textbf{特征名称} & \textbf{统计值} & \textbf{业务含义} \\
@@ -223,7 +224,6 @@
 用户最近2篇点击文章W2V相似度之和 & - & 综合反映候选文章与用户最近阅读内容的语义匹配程度 \\
 \bottomrule
 \end{tabular}
-\caption{召回相似度特征总结}
 \end{table}
 
 \textbf{关键发现：}相似度分数呈现明显的长尾分布，大部分文章相似度较低，只有少数文章相似度很高。\textbf{正样本的平均相似度分数（0.8901）远高于负样本（0.1206）}，说明相似度分数是强信号，验证了召回阶段的有效性。
@@ -250,6 +250,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{用户统计特征}
 \begin{tabular}{p{5cm}p{7cm}}
 \toprule
 \textbf{特征名称} & \textbf{业务含义} \\
@@ -261,7 +262,6 @@
 用户-类别点击次数（user\_id\_category\_id\_cnt） & 反映用户对特定类别的偏好程度，比单纯类别特征更精细 \\
 \bottomrule
 \end{tabular}
-\caption{用户统计特征}
 \end{table}
 
 \textbf{时间相关特征：}新闻推荐中时间因素非常重要，我们构建了多个时间特征来捕捉用户的时效性偏好。
@@ -269,6 +269,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{时间相关特征}
 \begin{tabular}{p{5cm}p{7cm}}
 \toprule
 \textbf{特征名称} & \textbf{业务含义} \\
@@ -284,7 +285,6 @@
 用户点击时间的小时标准差 & 反映阅读时间规律性，标准差小说明阅读时间集中 \\
 \bottomrule
 \end{tabular}
-\caption{时间相关特征}
 \end{table}
 
 \textbf{文章内容特征：}这些特征反映用户对文章内容属性的偏好。
@@ -292,6 +292,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{文章内容特征}
 \begin{tabular}{p{5cm}p{7cm}}
 \toprule
 \textbf{特征名称} & \textbf{业务含义} \\
@@ -303,7 +304,6 @@
 候选文章字数与用户最后点击文章字数的差值 & 反映文章长度变化幅度，帮助判断用户是否能接受长度变化 \\
 \bottomrule
 \end{tabular}
-\caption{文章内容特征}
 \end{table}
 
 \textbf{关键发现：}字数差值主要集中在0附近，说明大部分候选文章的长度和用户最近看的文章长度相近，符合用户阅读习惯：用户通常会在相似长度的文章之间切换。
@@ -329,6 +329,7 @@
 
 \begin{table}[H]
 \centering
+\caption{正负样本分布}
 \begin{tabular}{lcc}
 \toprule
 \textbf{样本类型} & \textbf{数量} & \textbf{比例} \\
@@ -339,7 +340,6 @@
 \textbf{总计} & \textbf{8,050,464} & \textbf{100\%} \\
 \bottomrule
 \end{tabular}
-\caption{正负样本分布}
 \end{table}
 
 \textbf{特征相关性分析：}从特征相关性热力图可以看出：
@@ -365,6 +365,7 @@
 \begin{table}[H]
 \centering
 \small
+\caption{召回方法对比}
 \begin{tabular}{p{3cm}p{5cm}cc}
 \toprule
 \textbf{召回方法} & \textbf{原理} & \textbf{HitRate@50} & \textbf{MRR@50} \\
@@ -376,7 +377,6 @@ Binetwork（二分网络） & 基于用户-物品二分网络结构，计算物�
 Word2Vec（词向量） & 将用户点击序列视为句子，训练Word2Vec模型，计算文章相似度 & 0.31 & 0.083 \\
 \bottomrule
 \end{tabular}
-\caption{召回方法对比}
 \end{table}
 
 \textbf{召回融合策略：}
@@ -472,6 +472,7 @@ lgb.LGBMClassifier(
 \begin{table}[H]
 \centering
 \small
+\caption{LightGBM特征重要性Top 10}
 \begin{tabular}{clc}
 \toprule
 \textbf{排名} & \textbf{特征名称} & \textbf{重要性分数} \\
@@ -488,7 +489,6 @@ lgb.LGBMClassifier(
 10 & user\_click\_article\_w2w\_sim\_sum\_2 & 24,231 \\
 \bottomrule
 \end{tabular}
-\caption{LightGBM特征重要性Top 10}
 \end{table}
 
 \textbf{训练结果（5折交叉验证）：}
@@ -496,6 +496,7 @@ lgb.LGBMClassifier(
 \begin{table}[H]
 \centering
 \small
+\caption{LightGBM训练结果}
 \begin{tabular}{lccccc}
 \toprule
 \textbf{指标} & \textbf{@5} & \textbf{@10} & \textbf{@20} & \textbf{@40} & \textbf{@50} \\
@@ -504,7 +505,6 @@ HitRate & 0.46 & 0.59 & 0.70 & 0.77 & 0.78 \\
 MRR & 0.281 & 0.298 & 0.306 & 0.309 & 0.309 \\
 \bottomrule
 \end{tabular}
-\caption{LightGBM训练结果}
 \end{table}
 
 \textbf{训练时间：} 每个fold约76秒，总计约6.3分钟
@@ -576,6 +576,7 @@ lgb.LGBMRanker(
 \begin{table}[H]
 \centering
 \small
+\caption{LambdaMART特征重要性Top 10}
 \begin{tabular}{clc}
 \toprule
 \textbf{排名} & \textbf{特征名称} & \textbf{重要性分数} \\
@@ -592,7 +593,6 @@ lgb.LGBMRanker(
 10 & user\_last\_click\_article\_binetwork\_sim & 28,220 \\
 \bottomrule
 \end{tabular}
-\caption{LambdaMART特征重要性Top 10}
 \end{table}
 
 \textbf{训练结果（5折交叉验证）：}
@@ -600,6 +600,7 @@ lgb.LGBMRanker(
 \begin{table}[H]
 \centering
 \small
+\caption{LambdaMART训练结果}
 \begin{tabular}{lccccc}
 \toprule
 \textbf{指标} & \textbf{@5} & \textbf{@10} & \textbf{@20} & \textbf{@40} & \textbf{@50} \\
@@ -608,7 +609,6 @@ HitRate & 0.46 & 0.59 & 0.70 & 0.77 & 0.78 \\
 MRR & 0.282 & 0.300 & 0.307 & 0.310 & 0.310 \\
 \bottomrule
 \end{tabular}
-\caption{LambdaMART训练结果}
 \end{table}
 
 \textbf{训练时间：} 每个fold约35-40秒，总计约3.2分钟
@@ -621,6 +621,7 @@ LambdaMART能够有效利用列表级别特征，这些特征是Listwise方法�
 \begin{table}[H]
 \centering
 \small
+\caption{列表级别特征分析}
 \begin{tabular}{p{4cm}cp{7cm}}
 \toprule
 \textbf{特征名称} & \textbf{重要性} & \textbf{业务含义} \\
@@ -632,7 +633,6 @@ list\_rank & 72,591 & 反映召回阶段对文章的置信度。排名越靠前�
 sim\_score\_diff\_from\_max & 24,062 & 反映候选文章与最佳候选的差距。帮助判断文章在列表中的相对质量，差距太大可能不值得推荐。 \\
 \bottomrule
 \end{tabular}
-\caption{列表级别特征分析}
 \end{table}
 
 \subsubsection{模型对比分析}
@@ -641,6 +641,7 @@ sim\_score\_diff\_from\_max & 24,062 & 反映候选文章与最佳候选的差�
 
 \begin{table}[htbp]
 \centering
+\caption{LightGBM vs LambdaMART实际性能对比}
 \begin{tabular}{lcccc}
 \toprule
 指标 & LightGBM & LambdaMART & 差异  \\
@@ -652,7 +653,6 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 训练时间 & 6.3分钟 & 3.2分钟 & -49\%  \\
 \bottomrule
 \end{tabular}
-\caption{LightGBM vs LambdaMART实际性能对比}
 \end{table}
 
 \textbf{性能差异分析：}
@@ -700,6 +700,7 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 \begin{table}[H]
 \centering
 \small
+\caption{训练流程与时间统计}
 \begin{tabular}{p{3cm}cp{6cm}}
 \toprule
 \textbf{阶段} & \textbf{耗时} & \textbf{主要内容} \\
@@ -717,7 +718,6 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 \textbf{总计} & \textbf{14-17分钟} & \textbf{离线验证模式} \\
 \bottomrule
 \end{tabular}
-\caption{训练流程与时间统计}
 \end{table}
 
 \subsection{关键优化点}
@@ -727,6 +727,7 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 \begin{table}[H]
 \centering
 \small
+\caption{关键优化策略}
 \begin{tabular}{p{3.5cm}p{8cm}}
 \toprule
 \textbf{优化策略} & \textbf{效果说明} \\
@@ -742,7 +743,6 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 特征缓存 & 保存特征文件，避免重复计算，提升迭代效率 \\
 \bottomrule
 \end{tabular}
-\caption{关键优化策略}
 \end{table}
 
 \section{比赛排名}
@@ -753,6 +753,7 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 
 \begin{table}[htbp]
 \centering
+\caption{团队成员分工}
 \begin{tabular}{lc}
 \toprule
 成员 & 主要职责 \\
@@ -761,7 +762,6 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 罗浩民 & 排序模型设计与优化、实验报告撰写 \\
 \bottomrule
 \end{tabular}
-\caption{团队成员分工}
 \end{table}
 
 \section{个人总结和感悟}
