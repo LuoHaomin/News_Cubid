@@ -414,34 +414,9 @@ Word2Vec（词向量） & 将用户点击序列视为句子，训练Word2Vec模�
 \item \textbf{代表算法}：LambdaMART、ListNet等
 \end{itemize}
 
-\textbf{LambdaMART原理}
+我们实现并对比了两种排序方法：Pointwise（LightGBM）和Listwise（LambdaMART）。
 
-LambdaMART是结合LambdaRank和MART（Multiple Additive Regression Trees）的排序算法：
-
-\begin{enumerate}
-\item \textbf{LambdaRank思想}：通过定义梯度（Lambda）来直接优化NDCG等排序指标
-  \begin{itemize}
-  \item 对于每个样本对(i,j)，如果i的相关性高于j，则i的Lambda增加，j的Lambda减少
-  \item Lambda的大小与交换位置后NDCG的提升成正比
-  \end{itemize}
-
-\item \textbf{MART实现}：使用梯度提升树（GBDT）来拟合Lambda梯度
-  \begin{itemize}
-  \item 每棵树预测Lambda值，多棵树累加得到最终排序分数
-  \item 通过梯度提升逐步优化排序性能
-  \end{itemize}
-
-\item \textbf{优势}：
-  \begin{itemize}
-  \item 直接优化NDCG等排序指标，理论上性能优于Pointwise方法
-  \item 使用GBDT实现，继承了树模型的优点（特征交互、非线性建模）
-  \item 训练效率高，支持大规模数据
-  \end{itemize}
-\end{enumerate}
-
-我们对比了两种排序方法：Pointwise（LightGBM）和Listwise（LambdaMART）。
-
-\subsubsection{方法一：LightGBM（Pointwise）}
+\subsubsection{LightGBM（Pointwise）}
 
 \textbf{理论原理：}
 
@@ -463,12 +438,9 @@ LightGBM是一个基于梯度提升决策树（GBDT）的框架，我们将其�
   \item \textbf{类别特征支持}：原生支持类别特征，无需one-hot编码
   \end{itemize}
 
-\item \textbf{理论性能分析}：
-  \begin{itemize}
-  \item \textbf{优点}：实现简单，训练速度快，特征重要性可解释
-  \item \textbf{缺点}：无法直接优化排序指标（如NDCG），只能间接通过分类准确率优化
-  \item \textbf{适用场景}：数据量大、特征维度高、需要快速迭代的场景
-  \end{itemize}
+
+\item \textbf{缺点}：无法直接优化排序指标（如NDCG），只能间接通过分类准确率优化
+  
 \end{enumerate}
 
 \textbf{实际配置：}
@@ -537,25 +509,8 @@ MRR & 0.281 & 0.298 & 0.306 & 0.309 & 0.309 \\
 
 \textbf{训练时间：} 每个fold约76秒，总计约6.3分钟
 
-\textbf{理论性能 vs 实际性能：}
 
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lccc}
-\toprule
-方面 & 理论预期 & 实际表现 & 分析 \\
-\midrule
-训练速度 & 快速（直方图算法） & 6.3分钟（5折） & \textcolor{green}{✅ 符合预期，训练效率高} \\
-内存占用 & 低（离散化特征） & 适中 & \textcolor{green}{✅ 符合预期} \\
-排序性能 & 中等（间接优化） & MRR@5=0.281 & \textcolor{orange}{⚠ 无法直接优化排序指标} \\
-特征重要性 & 可解释 & 清晰（sim\_score最重要） & \textcolor{green}{✅ 符合预期} \\
-过拟合风险 & 中等（需正则化） & 通过早停和正则化控制 & \textcolor{green}{✅ 控制良好} \\
-\bottomrule
-\end{tabular}
-\caption{LightGBM理论性能 vs 实际性能}
-\end{table}
-
-\subsubsection{方法二：LambdaMART（Listwise）}
+\subsubsection{方LambdaMART（Listwise）}
 
 \textbf{理论原理：}
 
@@ -576,19 +531,17 @@ LambdaMART是结合LambdaRank和MART的排序算法，属于Listwise方法：
   \item 通过梯度提升逐步优化排序性能
   \end{itemize}
 
-\item \textbf{理论优势}：
+\item \textbf{优势}：
   \begin{itemize}
   \item \textbf{直接优化排序指标}：相比Pointwise方法，直接优化NDCG，理论上性能更优
   \item \textbf{考虑列表上下文}：能够利用列表级别的信息（如列表大小、多样性等）
   \item \textbf{梯度提升优势}：继承了GBDT的优点（特征交互、非线性建模）
   \end{itemize}
 
-\item \textbf{理论性能分析}：
-  \begin{itemize}
-  \item \textbf{优点}：直接优化排序指标，理论上性能最优；支持列表级别特征
+
   \item \textbf{缺点}：实现复杂，需要group信息；训练时间可能较长
   \item \textbf{适用场景}：对排序性能要求高、有列表级别特征的场景
-  \end{itemize}
+  
 \end{enumerate}
 
 \textbf{实际配置：}
@@ -684,38 +637,19 @@ sim\_score\_diff\_from\_max & 24,062 & 反映候选文章与最佳候选的差�
 
 \subsubsection{模型对比分析}
 
-\textbf{理论对比：}
-
-\begin{table}[htbp]
-\centering
-\begin{tabular}{lccc}
-\toprule
-维度 & LightGBM (Pointwise) & LambdaMART (Listwise) & 理论优势 \\
-\midrule
-优化目标 & 分类准确率 & NDCG等排序指标 & LambdaMART \textcolor{green}{✅} \\
-样本关系 & 独立处理 & 考虑列表上下文 & LambdaMART \textcolor{green}{✅} \\
-列表特征 & 难以利用 & 天然支持 & LambdaMART \textcolor{green}{✅} \\
-实现复杂度 & 简单 & 复杂 & LightGBM \textcolor{green}{✅} \\
-训练速度 & 快 & 中等 & LightGBM \textcolor{green}{✅} \\
-可解释性 & 好 & 中等 & LightGBM \textcolor{green}{✅} \\
-\bottomrule
-\end{tabular}
-\caption{LightGBM vs LambdaMART理论对比}
-\end{table}
-
 \textbf{实际性能对比：}
 
 \begin{table}[htbp]
 \centering
 \begin{tabular}{lcccc}
 \toprule
-指标 & LightGBM & LambdaMART & 差异 & 理论符合度 \\
+指标 & LightGBM & LambdaMART & 差异  \\
 \midrule
-MRR@5 & 0.281 & 0.282 & +0.001 & \textcolor{green}{✅ 符合（Listwise略优）} \\
-MRR@10 & 0.298 & 0.300 & +0.002 & \textcolor{green}{✅ 符合} \\
-MRR@20 & 0.306 & 0.307 & +0.001 & \textcolor{green}{✅ 符合} \\
-MRR@50 & 0.309 & 0.310 & +0.001 & \textcolor{green}{✅ 符合} \\
-训练时间 & 6.3分钟 & 3.2分钟 & -49\% & \textcolor{red}{❌ 意外（LambdaMART更快）} \\
+MRR@5 & 0.281 & 0.282 & +0.001  \\
+MRR@10 & 0.298 & 0.300 & +0.002  \\
+MRR@20 & 0.306 & 0.307 & +0.001  \\
+MRR@50 & 0.309 & 0.310 & +0.001 \\
+训练时间 & 6.3分钟 & 3.2分钟 & -49\%  \\
 \bottomrule
 \end{tabular}
 \caption{LightGBM vs LambdaMART实际性能对比}
@@ -858,5 +792,6 @@ MRR@50 & 0.309 & 0.310 & +0.001 & \textcolor{green}{✅ 符合} \\
 \item \textbf{多目标优化}：不仅优化点击率，还可以考虑多样性、新颖性等指标
 \item \textbf{模型融合}：尝试融合多个模型（如LGB + LambdaMART + 深度学习模型）进一步提升性能
 \end{enumerate}
+
 
 \end{document}
