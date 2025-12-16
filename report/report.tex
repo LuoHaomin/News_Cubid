@@ -499,6 +499,28 @@ LightGBM是一个基于梯度提升决策树（GBDT）的框架，我们将其�
   
 \end{enumerate}
 
+\textbf{Loss 函数原理：}
+
+LightGBM在二分类任务中采用\textbf{二元交叉熵损失函数}，如下：
+\begin{equation}
+L = -\frac{1}{N}\sum_{i=1}^{N}\left[y_i \log(p_i) + (1-y_i)\log(1-p_i)\right]
+\end{equation}
+其中$y_i$为样本$i$的真实标签，$p_i$为模型预测样本$i$被点击的概率。通过最小化该损失，模型可以区分点击和未点击样本。
+
+\textbf{为什么最小化这个函数可以达到分类目的？}
+
+\begin{enumerate}
+\item \textbf{最大似然估计原理}：交叉熵损失函数等价于最大化似然函数。当$y_i=1$时，我们希望$p_i$尽可能接近1；当$y_i=0$时，我们希望$p_i$尽可能接近0。通过最小化损失函数，模型学习到最大化正确分类的概率。
+
+\item \textbf{概率解释}：模型输出$p_i$可以理解为"文章被点击的概率"。通过最小化交叉熵，模型学习到区分正负样本的决策边界，使得正样本的预测概率高，负样本的预测概率低，从而实现分类目的。
+
+\item \textbf{处理类别不平衡}：我们使用\texttt{scale\_pos\_weight=10}对正样本加权，相当于在损失函数中给正样本更大的权重：
+  \begin{equation}
+  L_{weighted} = -\frac{1}{N}\sum_{i=1}^{N}\left[w \cdot y_i \log(p_i) + (1-y_i)\log(1-p_i)\right]
+  \end{equation}
+  其中$w=10$是正样本权重。这样即使正样本数量少，模型也会更关注正样本的学习，提升对正样本的识别能力。
+\end{enumerate}
+
 \textbf{实际配置：}
 
 \begin{lstlisting}[language=Python, frame=tb, caption=LightGBM配置参数]
@@ -598,6 +620,43 @@ LambdaMART是结合LambdaRank和MART的排序算法，属于Listwise方法：
   \item \textbf{缺点}：实现复杂，需要group信息；训练时间可能较长
   \item \textbf{适用场景}：对排序性能要求高、有列表级别特征的场景
   
+\end{enumerate}
+
+\textbf{Loss函数原理：}
+
+LambdaMART使用\textbf{LambdaRank损失函数}，直接优化NDCG（Normalized Discounted Cumulative Gain）排序指标。其核心思想是定义每个样本的Lambda梯度，反映交换两个样本位置后NDCG的变化。
+
+\textbf{Lambda梯度的定义：}
+
+对于样本对$(i,j)$，如果样本$i$的相关性$y_i$大于样本$j$的相关性$y_j$（即$y_i > y_j$），我们希望模型预测分数满足$s_i > s_j$。Lambda梯度定义为：
+
+\begin{equation}
+\lambda_{ij} = \frac{-\sigma}{1+e^{\sigma(s_i-s_j)}} \cdot |\Delta NDCG_{ij}|
+\end{equation}
+
+其中：
+\begin{itemize}
+\item $\sigma$ 是平滑参数（通常取1）
+\item $s_i, s_j$ 是模型对样本$i$和$j$的预测分数
+\item $\Delta NDCG_{ij}$ 是交换样本$i$和$j$的位置后NDCG的变化量
+\end{itemize}
+
+每个样本$i$的Lambda值为所有相关样本对的Lambda梯度之和：
+
+\begin{equation}
+\lambda_i = \sum_{j: y_i \neq y_j} \lambda_{ij} \cdot \text{sign}(y_i - y_j)
+\end{equation}
+
+\textbf{为什么最小化这个函数可以达到排序目的？}
+
+\begin{enumerate}
+\item \textbf{直接优化排序指标}：LambdaRank直接优化NDCG，而不是间接优化分类准确率。NDCG考虑了排序位置的重要性（位置越靠前权重越大），更符合推荐系统的实际需求。
+
+\item \textbf{位置感知优化}：$\Delta NDCG_{ij}$项使得模型更关注\textbf{位置重要}的样本对。如果交换两个样本的位置对NDCG影响大（比如将相关文档从第1位换到第10位），Lambda值会更大，促使模型优先优化这些样本对的排序。
+
+\item \textbf{列表级别优化}：LambdaMART在计算Lambda时考虑整个列表的上下文，能够利用列表级别特征（如\texttt{sim\_score\_diff\_from\_avg}），在列表内部进行比较，找到真正相对更好的文章。
+
+\item \textbf{理论保证}：LambdaRank的梯度方向与NDCG的梯度方向一致，通过梯度提升树拟合Lambda梯度，逐步优化排序性能，理论上能够收敛到最优排序。
 \end{enumerate}
 
 \textbf{实际配置：}
@@ -815,6 +874,7 @@ MRR@50 & 0.309 & 0.310 & +0.001 \\
 \end{minipage}
 \caption{比赛排名}
 \end{figure}
+
 \section{团队成员分工}
 
 \begin{table}[htbp]
